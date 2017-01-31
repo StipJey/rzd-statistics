@@ -1,5 +1,14 @@
 var request = require("request").defaults({jar: true, baseUrl: "https://pass.rzd.ru/timetable/public/ru?"});
 
+var MongoClient = require('mongodb').MongoClient, assert = require('assert');
+
+MongoClient.connect('mongodb://localhost:27017/test', function(err, db){
+    assert.equal(null, err);
+    db.collection('test').find().toArray(console.log);
+    //db.collection('test').insertOne({test: 'superTest'});
+    db.close();
+});
+
 function createURI(object) {
     let output = '';
     Object.keys(object).forEach((key, i, arr) => {
@@ -12,7 +21,7 @@ function createURI(object) {
 }
 
 function getRid(date) {
-    return new Promise(function(resolve, reject) {
+    return new Promise(function (resolve, reject) {
         request({
             uri: createURI({
                 'STRUCTURE_ID': 735,
@@ -28,7 +37,7 @@ function getRid(date) {
             timeout: 10000,
             followRedirect: true,
             maxRedirects: 10
-        }, function(error, response, body) {
+        }, function (error, response, body) {
             if (error) reject(error);
             resolve({rid: JSON.parse(body).rid, date: date});
         });
@@ -36,8 +45,8 @@ function getRid(date) {
 }
 
 function getTrainList({rid, date}) {
-    return new Promise(function(resolve, reject) {
-        setTimeout(function() {
+    return new Promise(function (resolve, reject) {
+        setTimeout(function () {
             request({
                 uri: createURI({
                     'STRUCTURE_ID': 735,
@@ -54,7 +63,7 @@ function getTrainList({rid, date}) {
                 timeout: 10000,
                 followRedirect: true,
                 maxRedirects: 10
-            }, function(error, response, body) {
+            }, function (error, response, body) {
                 if (error) reject(error);
                 resolve(JSON.parse(body).tp[0].list);
             });
@@ -66,19 +75,17 @@ function singlingCost(trains) {
     let minimalCost = null;
     trains.forEach(train => {
         train.cars.forEach(car => {
-        if (car.type === 'Плац') {
-        minimalCost = (!minimalCost || car.tariff < minimalCost) ? car.tariff : minimalCost;
-    }
-})
-});
+            if (car.type === 'Плац') {
+                minimalCost = (!minimalCost || car.tariff < minimalCost) ? car.tariff : minimalCost;
+            }
+        })
+    });
     return minimalCost;
 }
 
 
-
 function getMinimalCostByDate(date) {
-    return new Promise((resolve, reject) =>
-    {
+    return new Promise((resolve, reject) => {
         getRid(date)
             .then(getTrainList)
             .then(singlingCost)
@@ -87,33 +94,35 @@ function getMinimalCostByDate(date) {
     })
 }
 
-const dates = [
-    '01.02.2017',
-    '02.02.2017',
-    '03.02.2017',
-    '04.02.2017',
-    '05.02.2017',
-    '06.02.2017',
-    '07.02.2017',
-    '08.02.2017',
-    '09.02.2017',
-    '10.02.2017',
-];
+function getNextDay(date) {
+    var dc = date.split('.')
+    var d = new Date(+dc[2], +dc[1] - 1, +dc[0]);
+    d.setDate(d.getDate() + 1);
+
+    function normalize(number) {
+        number = number.toString()
+        return number.length === 1 ? '0' + number : number
+    }
+
+    return normalize(d.getDate()) + '.' + normalize(d.getMonth() + 1) + '.' + d.getFullYear();
+}
 
 let chain = Promise.resolve();
 
 let results = [];
 
+function getCosts() {
 // в цикле добавляем задачи в цепочку
-dates.forEach(function(date) {
-    chain = chain
-        .then(() => getMinimalCostByDate(date))
-        .then((result) => {
-            results.push(result);
-        });
-});
+    dates.forEach(function (date) {
+        chain = chain
+            .then(() => getMinimalCostByDate(date))
+            .then((result) => {
+                results.push(result);
+            });
+    });
 
 // в конце — выводим результаты
-chain.then(() => {
-    console.log(results);
-});
+    chain.then(() => {
+        console.log(results);
+    });
+}

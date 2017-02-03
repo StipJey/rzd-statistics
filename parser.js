@@ -9,8 +9,9 @@ MongoClient.connect('mongodb://localhost:27017/test', function(err, db) {
 
 	for (let i = 0; i < 50; i++) {
 		chain = chain
-			.then(() => getMinimalCostByDate(date))
+			.then(() => getCostsByDate(date))
 			.then((result) => {
+				log(date, result);
 				pushToDb(db, date, result);
 			}).then(() => {
 				date = getNextDay(date);
@@ -25,6 +26,13 @@ MongoClient.connect('mongodb://localhost:27017/test', function(err, db) {
 
 
 });
+
+function log(date, cost) {
+    return new Promise((reject, resolve) => {
+        console.log(date, cost);
+        resolve()
+    })
+}
 
 function pushToDb(db, date, cost) {
 	return new Promise((resolve, reject) => {
@@ -102,6 +110,21 @@ function getTrainList({rid, date}) {
 	})
 }
 
+function prepareCostObject(trains) {
+    if (!trains) return null;
+    let output = {};
+    trains.forEach(train => {
+        output[train.number] = {};
+        train.cars.forEach(car => {
+            output[train.number][car.type] = {
+                cost: car.tariff,
+                freeSeats: car.freeSeats,
+            }
+        })
+    });
+    return output;
+}
+
 function singlingCost(trains) {
 	if (!trains) return null;
 	let minimalCost = null;
@@ -115,11 +138,11 @@ function singlingCost(trains) {
 	return minimalCost;
 }
 
-function getMinimalCostByDate(date) {
+function getCostsByDate(date) {
 	return new Promise((resolve, reject) => {
 		getRid(date)
 			.then(getTrainList)
-			.then(singlingCost)
+			.then(prepareCostObject)
 			.then(resolve)
 			.catch(reject);
 	})
